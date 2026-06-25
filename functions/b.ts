@@ -1,9 +1,9 @@
 /// <reference types="@cloudflare/workers-types" />
 //
-// Geo beacon endpoint. A page's JS pings GET /b?site=…&path=… ; we read the
-// visitor's geo from request.cf (free on all plans) and log one row to D1.
-// Bot-free by construction: only real browsers that execute the page script hit
-// this. Returns a 1×1 gif so it can be used as an <img> beacon (no CORS needed).
+// Geo beacon endpoint. A page's JS pings GET /b?site=…&path=…&ref=…&l=…&sw=…&nv=… ;
+// we read the visitor's geo/network from request.cf (free on all plans) plus a few
+// client signals, and log one row to D1. Bot-free by construction (only real
+// browsers that execute the page script hit this). Returns a 1×1 gif.
 
 interface Env {
   gss_geo: D1Database
@@ -24,36 +24,76 @@ function pixel(): Response {
 }
 const clip = (v: unknown, n: number) => String(v ?? '').slice(0, n)
 
+// External referrer host only — drop same-page/internal navigations.
+function refHost(ref: string, pageHost: string): string {
+  try {
+    if (!ref) return ''
+    const h = new URL(ref).hostname
+    return h && h !== pageHost ? h.replace(/^www\./, '') : ''
+  } catch {
+    return ''
+  }
+}
+function browserOf(ua: string): string {
+  if (/Edg\//i.test(ua)) return 'Edge'
+  if (/OPR\/|Opera/i.test(ua)) return 'Opera'
+  if (/Firefox\//i.test(ua)) return 'Firefox'
+  if (/Chrome\//i.test(ua)) return 'Chrome'
+  if (/Safari\//i.test(ua)) return 'Safari'
+  return 'Other'
+}
+function osOf(ua: string): string {
+  if (/Windows/i.test(ua)) return 'Windows'
+  if (/Android/i.test(ua)) return 'Android'
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS'
+  if (/Mac OS X|Macintosh/i.test(ua)) return 'macOS'
+  if (/Linux/i.test(ua)) return 'Linux'
+  return 'Other'
+}
+
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const url = new URL(ctx.request.url)
   const cf = ((ctx.request as any).cf ?? {}) as Record<string, unknown>
   const ua = ctx.request.headers.get('user-agent') ?? ''
+  let pageHost = ''
+  try {
+    pageHost = new URL(ctx.request.headers.get('referer') ?? '').hostname
+  } catch {
+    /* no referer */
+  }
 
-  // Only log requests that look like a real browser (defence in depth — the page
-  // script already filters most non-humans).
   if (/Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
-    const device = /Mobile|Android|iPhone|iPod/i.test(ua)
-      ? 'mobile'
-      : /iPad|Tablet/i.test(ua)
-        ? 'tablet'
-        : 'desktop'
+    const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
+    const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
     try {
       await ctx.env.gss_geo
         .prepare(
-          `INSERT INTO hits (ts, site, path, country, region, city, lat, lon, colo, device)
-           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO hits
+            (ts, site, path, referrer, country, region, city, postal, continent, timezone,
+             lat, lon, colo, org, device, browser, os, lang, screenw, visitor)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         )
         .bind(
           Date.now(),
           clip(url.searchParams.get('site'), 40),
           clip(url.searchParams.get('path'), 200),
+          clip(refHost(url.searchParams.get('ref') ?? '', pageHost), 120),
           clip(cf.country, 4),
           clip(cf.region, 60),
           clip(cf.city, 80),
+          clip(cf.postalCode, 16),
+          clip(cf.continent, 4),
+          clip(cf.timezone, 40),
           clip(cf.latitude, 16),
           clip(cf.longitude, 16),
           clip(cf.colo, 8),
+          clip(cf.asOrganization, 80),
           device,
+          browserOf(ua),
+          osOf(ua),
+          clip(url.searchParams.get('l'), 12),
+          sw,
+          url.searchParams.get('nv') === '1' ? 'returning' : 'new',
         )
         .run()
     } catch {
@@ -63,7 +103,6 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return pixel()
 }
 
-// Allow fetch()-based beacons too.
 export const onRequestOptions: PagesFunction = async () =>
   new Response(null, {
     headers: {
