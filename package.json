@@ -1,0 +1,15 @@
+{
+  "name": "gss-beacon",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Public geo beacon for Good Stuff Software sites — logs request.cf geo per real pageview to D1 (bot-free, consumed by gss-stats).",
+  "scripts": {
+    "deploy": "wrangler pages deploy",
+    "schema": "wrangler d1 execute gss-geo --remote --file schema.sql",
+    "schema:local": "wrangler d1 execute gss-geo --local --file schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241218.0",
+    "wrangler": "^4.20.0"
+  }
+}

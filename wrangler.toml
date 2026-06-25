@@ -1,0 +1,9 @@
+name = "gss-beacon"
+compatibility_date = "2026-06-01"
+pages_build_output_dir = "public"
+
+# Shared geo store — the SAME database is bound (read-only in practice) by gss-stats.
+[[d1_databases]]
+binding = "gss_geo"
+database_name = "gss-geo"
+database_id = "fa0b2929-0086-479e-ae10-50509c34ebf8"
