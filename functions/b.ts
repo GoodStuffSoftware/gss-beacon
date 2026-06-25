@@ -62,7 +62,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     /* no referer */
   }
 
-  if (/Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
+  const site = clip(url.searchParams.get('site'), 40)
+  const internal = /^(stats|beacon)$/i.test(site) // never log the dashboard or beacon infra itself
+  if (!internal && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
     const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
     const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
     try {
@@ -75,7 +77,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         )
         .bind(
           Date.now(),
-          clip(url.searchParams.get('site'), 40),
+          site,
           clip(url.searchParams.get('path'), 200),
           clip(refHost(url.searchParams.get('ref') ?? '', pageHost), 120),
           clip(cf.country, 4),
