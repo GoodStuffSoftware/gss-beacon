@@ -64,7 +64,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const site = clip(url.searchParams.get('site'), 40)
   const internal = /^(stats|beacon)$/i.test(site) // never log the dashboard or beacon infra itself
-  if (!internal && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
+  // Owner opt-out: /mute set a durable .goodstuff.software cookie on this device;
+  // it also recorded this connection's IP in excluded_ips (covers cross-domain
+  // sites the cookie can't reach). The insert below skips excluded IPs directly.
+  const muted = /(?:^|;\s*)gssb_mute=1(?:;|$)/.test(ctx.request.headers.get('cookie') ?? '')
+  const ip = ctx.request.headers.get('CF-Connecting-IP') ?? ''
+  if (!internal && !muted && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
     const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
     const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
     try {
@@ -73,7 +78,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           `INSERT INTO hits
             (ts, site, path, referrer, country, region, city, postal, continent, timezone,
              lat, lon, colo, org, device, browser, os, lang, screenw, visitor)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+           WHERE NOT EXISTS (SELECT 1 FROM excluded_ips WHERE ip = ?)`,
         )
         .bind(
           Date.now(),
@@ -96,6 +102,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           clip(url.searchParams.get('l'), 12),
           sw,
           url.searchParams.get('nv') === '1' ? 'returning' : 'new',
+          ip, // skip the insert entirely if this connection is on the exclusion list
         )
         .run()
     } catch {

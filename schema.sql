@@ -28,3 +28,12 @@ CREATE TABLE IF NOT EXISTS hits (
 );
 CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits (ts);
 CREATE INDEX IF NOT EXISTS idx_hits_site_ts ON hits (site, ts);
+
+-- Owner opt-out by connection. /mute inserts the caller's IP; /b skips any hit
+-- from a listed IP (covers every site, incl. other domains the cookie can't reach).
+-- Only the exact IP is excluded — a neighbour on the same ISP has a different IP.
+CREATE TABLE IF NOT EXISTS excluded_ips (
+  ip   TEXT PRIMARY KEY,           -- CF-Connecting-IP captured at /mute time
+  note TEXT NOT NULL DEFAULT '',   -- human hint: "Fuquay Varina, NC · Ting Fiber"
+  ts   INTEGER NOT NULL DEFAULT 0  -- when it was added (epoch ms)
+);
