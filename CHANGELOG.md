@@ -7,9 +7,10 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- **Referrer path capture.** A new `refpath` field records the first two segments of the
-  referring URL's path (e.g. `/r/sudoku`) — never a slug or query string — so you can see
-  which subreddit/section drove a visit.
+- **Referrer path capture.** A new `refpath` field records the first two segments of an
+  external referrer's path (e.g. `/r/sudoku`) — never a slug or query string — so you can
+  see which subreddit/section drove a visit. `beacon.js` now derives and sends it too, so
+  every beacon.js-instrumented site captures it (not just custom integrations).
 
 ### Fixed
 - **Automated app-testing traffic is no longer counted.** Firebase Test Lab / Play

@@ -25,10 +25,26 @@
     } catch (e) {
       /* storage blocked — treat as new */
     }
+    // External referrer path — first 2 segments only (e.g. "/r/sudoku"), so we can see
+    // which subreddit/section sent the visit. ONLY for a different-host referrer, so we
+    // never leak our own internal navigation paths. The /b endpoint re-caps it defensively.
+    var refpath = ''
+    try {
+      if (document.referrer) {
+        var ru = new URL(document.referrer)
+        if (ru.hostname && ru.hostname !== location.hostname) {
+          var segs = ru.pathname.split('/').filter(function (x) { return !!x }).slice(0, 2)
+          if (segs.length) refpath = '/' + segs.join('/')
+        }
+      }
+    } catch (e) {
+      /* malformed referrer — no refpath */
+    }
     var q =
       '?site=' + encodeURIComponent(site) +
       '&path=' + encodeURIComponent(location.pathname) +
       '&ref=' + encodeURIComponent(document.referrer || '') +
+      '&refpath=' + encodeURIComponent(refpath) +
       '&l=' + encodeURIComponent(navigator.language || '') +
       '&sw=' + (window.innerWidth || (window.screen && window.screen.width) || 0) +
       '&nv=' + returning
