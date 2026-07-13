@@ -24,15 +24,20 @@ function pixel(): Response {
 }
 const clip = (v: unknown, n: number) => String(v ?? '').slice(0, n)
 
-// External referrer host only — drop same-page/internal navigations.
+// External referrer host only — drop same-page/internal navigations. Accepts EITHER a
+// full URL (https://www.reddit.com/r/x) OR a bare hostname (reddit.com), so a sender
+// that passes only the hostname still gets attributed instead of silently dropped.
 function refHost(ref: string, pageHost: string): string {
+  if (!ref) return ''
+  let h = ''
   try {
-    if (!ref) return ''
-    const h = new URL(ref).hostname
-    return h && h !== pageHost ? h.replace(/^www\./, '') : ''
+    h = new URL(ref).hostname
   } catch {
-    return ''
+    h = ref.split(/[/?#]/)[0].split(':')[0] // bare hostname fallback
   }
+  h = h.toLowerCase().replace(/^www\./, '')
+  const page = String(pageHost || '').toLowerCase().replace(/^www\./, '')
+  return h && h !== page ? h : ''
 }
 function browserOf(ua: string): string {
   if (/Edg\//i.test(ua)) return 'Edge'

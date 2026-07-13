@@ -13,6 +13,9 @@ All notable changes to **gss-beacon** are documented here. The format follows
   every beacon.js-instrumented site captures it (not just custom integrations).
 
 ### Fixed
+- **Referrer attribution no longer depends on the URL format.** `/b` extracts the host
+  from either a full URL (`https://www.reddit.com/…`) or a bare hostname (`reddit.com`),
+  so a sender that passes only the hostname is still attributed instead of dropped.
 - **Automated app-testing traffic is no longer counted.** Firebase Test Lab / Play
   pre-launch run the app inside Google data centers and fire the beacon; hits from
   cloud/data-center ISPs (Google, AWS, Azure, …) are now dropped, so only real users
