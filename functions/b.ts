@@ -79,13 +79,17 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!internal && !muted && !datacenter && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
     const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
     const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
+    // Referrer path — e.g. "/r/sudoku" to see which subreddit sent the visit. Enforce the
+    // privacy contract on our side too: strip any query/hash, keep at most 2 path segments.
+    const rpSegs = (url.searchParams.get('refpath') ?? '').split(/[?#]/)[0].split('/').filter(Boolean).slice(0, 2)
+    const refpath = rpSegs.length ? clip('/' + rpSegs.join('/'), 60) : ''
     try {
       await ctx.env.gss_geo
         .prepare(
           `INSERT INTO hits
             (ts, site, path, referrer, country, region, city, postal, continent, timezone,
-             lat, lon, colo, org, device, browser, os, lang, screenw, visitor)
-           SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+             lat, lon, colo, org, device, browser, os, lang, screenw, visitor, refpath)
+           SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
            WHERE NOT EXISTS (SELECT 1 FROM excluded_ips WHERE ip = ?)`,
         )
         .bind(
@@ -109,6 +113,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           clip(url.searchParams.get('l'), 12),
           sw,
           url.searchParams.get('nv') === '1' ? 'returning' : 'new',
+          refpath,
           ip, // skip the insert entirely if this connection is on the exclusion list
         )
         .run()

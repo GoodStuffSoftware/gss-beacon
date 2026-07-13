@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS hits (
   site      TEXT NOT NULL DEFAULT '',    -- "starrupture", "simpletile", "bestsudoku"…
   path      TEXT NOT NULL DEFAULT '',
   referrer  TEXT NOT NULL DEFAULT '',    -- external referrer host (bot-free), '' = direct/internal
+  refpath   TEXT NOT NULL DEFAULT '',    -- referrer path, first 2 segments only (e.g. "/r/sudoku"); no query/slug
   -- geography (request.cf)
   country   TEXT NOT NULL DEFAULT '',    -- ISO code
   region    TEXT NOT NULL DEFAULT '',    -- US state etc.

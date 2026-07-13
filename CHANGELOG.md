@@ -6,6 +6,11 @@ All notable changes to **gss-beacon** are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Referrer path capture.** A new `refpath` field records the first two segments of the
+  referring URL's path (e.g. `/r/sudoku`) — never a slug or query string — so you can see
+  which subreddit/section drove a visit.
+
 ### Fixed
 - **Automated app-testing traffic is no longer counted.** Firebase Test Lab / Play
   pre-launch run the app inside Google data centers and fire the beacon; hits from
