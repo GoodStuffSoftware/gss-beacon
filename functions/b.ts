@@ -69,7 +69,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   // sites the cookie can't reach). The insert below skips excluded IPs directly.
   const muted = /(?:^|;\s*)gssb_mute=1(?:;|$)/.test(ctx.request.headers.get('cookie') ?? '')
   const ip = ctx.request.headers.get('CF-Connecting-IP') ?? ''
-  if (!internal && !muted && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
+  // Data-center / cloud traffic is never a real user. On the WEB the beacon is bot-free
+  // (bots don't run page JS), but the native app runs inside Google's automated testing
+  // (Firebase Test Lab, Play pre-launch) on real devices in Google data centers — those
+  // DO fire the beacon. Real users are on a carrier/residential ISP; drop cloud ISPs.
+  const org = clip(cf.asOrganization, 80)
+  const datacenter =
+    /\b(google (llc|cloud)|amazon|aws|microsoft|azure|oracle (cloud|corp)|digitalocean|linode|hetzner|ovh|scaleway|vultr|contabo|gcore|leaseweb|m247)\b/i.test(org)
+  if (!internal && !muted && !datacenter && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
     const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
     const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
     try {
@@ -95,7 +102,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           clip(cf.latitude, 16),
           clip(cf.longitude, 16),
           clip(cf.colo, 8),
-          clip(cf.asOrganization, 80),
+          org,
           device,
           browserOf(ua),
           osOf(ua),

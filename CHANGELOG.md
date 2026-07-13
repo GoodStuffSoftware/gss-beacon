@@ -6,6 +6,12 @@ All notable changes to **gss-beacon** are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **Automated app-testing traffic is no longer counted.** Firebase Test Lab / Play
+  pre-launch run the app inside Google data centers and fire the beacon; hits from
+  cloud/data-center ISPs (Google, AWS, Azure, …) are now dropped, so only real users
+  on carrier/residential networks are logged.
+
 ## [0.1.0] — 2026-07-05
 
 First public release — the beacon as currently deployed at
