@@ -39,6 +39,25 @@ function refHost(ref: string, pageHost: string): string {
   const page = String(pageHost || '').toLowerCase().replace(/^www\./, '')
   return h && h !== page ? h : ''
 }
+
+// First two path segments of a "/a/b/c" path (e.g. a subreddit "/r/sudoku"). Strips any
+// query/hash; empty if there's no meaningful path.
+function first2Segs(pathish: string): string {
+  const segs = (pathish || '').split(/[?#]/)[0].split('/').filter(Boolean).slice(0, 2)
+  return segs.length ? '/' + segs.join('/') : ''
+}
+// Referrer path — which subreddit/section sent the visit. Prefer the explicit refpath
+// param; if it's absent, derive it from the ref URL's path (so a beacon that only sends
+// the raw document.referrer still yields the subreddit, with no client change needed).
+function refPathOf(refParam: string, explicit: string): string {
+  const fromExplicit = first2Segs(explicit)
+  if (fromExplicit) return fromExplicit
+  try {
+    return first2Segs(new URL(refParam).pathname) // bare hostnames have no path → ''
+  } catch {
+    return ''
+  }
+}
 function browserOf(ua: string): string {
   if (/Edg\//i.test(ua)) return 'Edge'
   if (/OPR\/|Opera/i.test(ua)) return 'Opera'
@@ -84,10 +103,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!internal && !muted && !datacenter && /Mozilla|AppleWebKit|Gecko|Chrome|Safari|Firefox/i.test(ua)) {
     const device = /Mobile|Android|iPhone|iPod/i.test(ua) ? 'mobile' : /iPad|Tablet/i.test(ua) ? 'tablet' : 'desktop'
     const sw = Math.max(0, Math.min(20000, parseInt(url.searchParams.get('sw') ?? '0') || 0))
-    // Referrer path — e.g. "/r/sudoku" to see which subreddit sent the visit. Enforce the
-    // privacy contract on our side too: strip any query/hash, keep at most 2 path segments.
-    const rpSegs = (url.searchParams.get('refpath') ?? '').split(/[?#]/)[0].split('/').filter(Boolean).slice(0, 2)
-    const refpath = rpSegs.length ? clip('/' + rpSegs.join('/'), 60) : ''
+    // Referrer host + path — e.g. "reddit.com" + "/r/sudoku". Compute the host once; only
+    // record a path for an EXTERNAL referrer (same-host refs are dropped by refHost, so no
+    // internal path leaks). refPathOf prefers the explicit refpath param, else derives it
+    // from a full ref URL — so a beacon that only sends document.referrer still yields it.
+    const refParam = url.searchParams.get('ref') ?? ''
+    const referrerHost = clip(refHost(refParam, pageHost), 120)
+    const refpath = referrerHost ? clip(refPathOf(refParam, url.searchParams.get('refpath') ?? ''), 60) : ''
     try {
       await ctx.env.gss_geo
         .prepare(
@@ -101,7 +123,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           Date.now(),
           site,
           clip(url.searchParams.get('path'), 200),
-          clip(refHost(url.searchParams.get('ref') ?? '', pageHost), 120),
+          referrerHost,
           clip(cf.country, 4),
           clip(cf.region, 60),
           clip(cf.city, 80),

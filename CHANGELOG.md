@@ -11,6 +11,9 @@ All notable changes to **gss-beacon** are documented here. The format follows
   external referrer's path (e.g. `/r/sudoku`) — never a slug or query string — so you can
   see which subreddit/section drove a visit. `beacon.js` now derives and sends it too, so
   every beacon.js-instrumented site captures it (not just custom integrations).
+- **Subreddit capture from the raw referrer.** When no explicit `refpath` is sent, `/b`
+  now derives it from a full `document.referrer` URL — so any beacon that forwards the
+  real referrer gets subreddit/section attribution with no client-side change.
 
 ### Fixed
 - **Referrer attribution no longer depends on the URL format.** `/b` extracts the host
