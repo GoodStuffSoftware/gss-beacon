@@ -25,7 +25,12 @@ CREATE TABLE IF NOT EXISTS hits (
   os        TEXT NOT NULL DEFAULT '',    -- Windows | macOS | iOS | Android | Linux | Other
   lang      TEXT NOT NULL DEFAULT '',    -- navigator.language (e.g. "en-US")
   screenw   INTEGER NOT NULL DEFAULT 0,  -- viewport width (responsive insight)
-  visitor   TEXT NOT NULL DEFAULT 'new'  -- 'new' | 'returning' (first-party localStorage; 'returning' is a reserved word)
+  visitor   TEXT NOT NULL DEFAULT 'new', -- 'new' | 'returning' (first-party localStorage; 'returning' is a reserved word)
+  -- campaign tags — utm_* from the landing URL query, so tagged links (e.g. one per
+  -- subreddit) are attributed even when the referrer is stripped.
+  source    TEXT NOT NULL DEFAULT '',    -- utm_source   (e.g. "reddit")
+  medium    TEXT NOT NULL DEFAULT '',    -- utm_medium   (e.g. "organic")
+  campaign  TEXT NOT NULL DEFAULT ''     -- utm_campaign (e.g. "r/sudoku")
 );
 CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits (ts);
 CREATE INDEX IF NOT EXISTS idx_hits_site_ts ON hits (site, ts);

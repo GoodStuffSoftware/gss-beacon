@@ -7,6 +7,12 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Campaign tags (`utm_*`).** `beacon.js` now reads `utm_source` / `utm_medium` /
+  `utm_campaign` from the landing URL and `/b` stores them (new `source` / `medium` /
+  `campaign` columns), so links tagged per source — e.g. one `utm_campaign` per subreddit —
+  are attributed even when the referrer is stripped. The insert falls back to the base
+  columns if the DB hasn't been migrated yet (see `migrate-campaign.sql`), so a pending
+  migration never drops a hit.
 - **Referrer path capture.** A new `refpath` field records the first two segments of an
   external referrer's path (e.g. `/r/sudoku`) — never a slug or query string — so you can
   see which subreddit/section drove a visit. `beacon.js` now derives and sends it too, so
