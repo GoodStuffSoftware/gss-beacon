@@ -110,42 +110,59 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     const refParam = url.searchParams.get('ref') ?? ''
     const referrerHost = clip(refHost(refParam, pageHost), 120)
     const refpath = referrerHost ? clip(refPathOf(refParam, url.searchParams.get('refpath') ?? ''), 60) : ''
-    try {
-      await ctx.env.gss_geo
+    // Campaign tags (utm_*) sent by beacon.js as us/um/uc — for per-source/subreddit
+    // attribution even when the referrer is stripped.
+    const utmSource = clip(url.searchParams.get('us'), 60)
+    const utmMedium = clip(url.searchParams.get('um'), 60)
+    const utmCampaign = clip(url.searchParams.get('uc'), 80)
+
+    // Base columns + values, in order. The utm columns are appended, so the base list stays
+    // a prefix and the fallback insert can reuse the same values.
+    const cols =
+      'ts, site, path, referrer, country, region, city, postal, continent, timezone, lat, lon, colo, org, device, browser, os, lang, screenw, visitor, refpath'
+    const vals: (string | number)[] = [
+      Date.now(),
+      site,
+      clip(url.searchParams.get('path'), 200),
+      referrerHost,
+      clip(cf.country, 4),
+      clip(cf.region, 60),
+      clip(cf.city, 80),
+      clip(cf.postalCode, 16),
+      clip(cf.continent, 4),
+      clip(cf.timezone, 40),
+      clip(cf.latitude, 16),
+      clip(cf.longitude, 16),
+      clip(cf.colo, 8),
+      org,
+      device,
+      browserOf(ua),
+      osOf(ua),
+      clip(url.searchParams.get('l'), 12),
+      sw,
+      url.searchParams.get('nv') === '1' ? 'returning' : 'new',
+      refpath,
+    ]
+    // ip is the LAST bind — WHERE NOT EXISTS skips the row if this connection is muted.
+    const insert = (extraCols: string, extraVals: string[]) =>
+      ctx.env.gss_geo
         .prepare(
-          `INSERT INTO hits
-            (ts, site, path, referrer, country, region, city, postal, continent, timezone,
-             lat, lon, colo, org, device, browser, os, lang, screenw, visitor, refpath)
-           SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+          `INSERT INTO hits (${cols}${extraCols}) SELECT ${Array(vals.length + extraVals.length).fill('?').join(',')}
            WHERE NOT EXISTS (SELECT 1 FROM excluded_ips WHERE ip = ?)`,
         )
-        .bind(
-          Date.now(),
-          site,
-          clip(url.searchParams.get('path'), 200),
-          referrerHost,
-          clip(cf.country, 4),
-          clip(cf.region, 60),
-          clip(cf.city, 80),
-          clip(cf.postalCode, 16),
-          clip(cf.continent, 4),
-          clip(cf.timezone, 40),
-          clip(cf.latitude, 16),
-          clip(cf.longitude, 16),
-          clip(cf.colo, 8),
-          org,
-          device,
-          browserOf(ua),
-          osOf(ua),
-          clip(url.searchParams.get('l'), 12),
-          sw,
-          url.searchParams.get('nv') === '1' ? 'returning' : 'new',
-          refpath,
-          ip, // skip the insert entirely if this connection is on the exclusion list
-        )
+        .bind(...vals, ...extraVals, ip)
         .run()
+    try {
+      // Preferred: also store the campaign tags. If the DB hasn't had the campaign columns
+      // added yet, fall back to the base insert so a pending migration never drops the hit
+      // (the fallback stops running once the columns exist).
+      await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
     } catch {
-      // Never let a logging failure break the beacon.
+      try {
+        await insert('', [])
+      } catch {
+        // Never let a logging failure break the beacon.
+      }
     }
   }
   return pixel()

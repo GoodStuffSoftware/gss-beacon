@@ -40,6 +40,17 @@
     } catch (e) {
       /* malformed referrer — no refpath */
     }
+    // Campaign tags from the landing URL's query (?utm_source=…&utm_medium=…&utm_campaign=…),
+    // so a link tagged per subreddit (e.g. utm_campaign=r/sudoku) is attributed even when
+    // Reddit strips the referrer. Read manually — no URLSearchParams (old-browser safe).
+    function qp(name) {
+      try {
+        var m = location.search.match(new RegExp('[?&]' + name + '=([^&]*)'))
+        return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : ''
+      } catch (e) {
+        return ''
+      }
+    }
     var q =
       '?site=' + encodeURIComponent(site) +
       '&path=' + encodeURIComponent(location.pathname) +
@@ -47,7 +58,10 @@
       '&refpath=' + encodeURIComponent(refpath) +
       '&l=' + encodeURIComponent(navigator.language || '') +
       '&sw=' + (window.innerWidth || (window.screen && window.screen.width) || 0) +
-      '&nv=' + returning
+      '&nv=' + returning +
+      '&us=' + encodeURIComponent(qp('utm_source')) +
+      '&um=' + encodeURIComponent(qp('utm_medium')) +
+      '&uc=' + encodeURIComponent(qp('utm_campaign'))
     new Image().src = 'https://beacon.goodstuff.software/b' + q
   } catch (e) {
     /* no-op */
