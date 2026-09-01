@@ -24,6 +24,19 @@ function pixel(): Response {
 }
 const clip = (v: unknown, n: number) => String(v ?? '').slice(0, n)
 
+// Campaign tag from OUR OWN tagged links: a short opaque label, nothing else. This is the
+// one place a query value is ever recorded, so it is an allowlist, not a sanitiser — a tag
+// must be [A-Za-z0-9_-] and at most MAX_TAG chars, and anything else is dropped WHOLE
+// rather than truncated or stripped. Truncating would let free text through as a prefix;
+// rejecting outright means a stray search term, an email, or punctuation appended to a
+// utm_ parameter can never smuggle content into the DB. Existing tags (reddit, cpc,
+// beta_v2_tier1en) are already within it.
+const MAX_TAG = 40
+const tag = (v: string | null): string => {
+  const s = String(v ?? '')
+  return s.length <= MAX_TAG && /^[A-Za-z0-9_-]*$/.test(s) ? s : ''
+}
+
 // External referrer host only — drop same-page/internal navigations. Accepts EITHER a
 // full URL (https://www.reddit.com/r/x) OR a bare hostname (reddit.com), so a sender
 // that passes only the hostname still gets attributed instead of silently dropped.
@@ -110,11 +123,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     const refParam = url.searchParams.get('ref') ?? ''
     const referrerHost = clip(refHost(refParam, pageHost), 120)
     const refpath = referrerHost ? clip(refPathOf(refParam, url.searchParams.get('refpath') ?? ''), 60) : ''
-    // Campaign tags (utm_*) sent by beacon.js as us/um/uc — for per-source/subreddit
-    // attribution even when the referrer is stripped.
-    const utmSource = clip(url.searchParams.get('us'), 60)
-    const utmMedium = clip(url.searchParams.get('um'), 60)
-    const utmCampaign = clip(url.searchParams.get('uc'), 80)
+    // Campaign tags (utm_*) sent by beacon.js as us/um/uc — for per-source/campaign
+    // attribution even when the referrer is stripped (ad redirects almost always strip it).
+    // These three NAMED params are the only query values that reach the DB; the beacon never
+    // records an arbitrary query string. Each is allowlist-validated by tag() above.
+    const utmSource = tag(url.searchParams.get('us'))
+    const utmMedium = tag(url.searchParams.get('um'))
+    const utmCampaign = tag(url.searchParams.get('uc'))
 
     // Base columns + values, in order. The utm columns are appended, so the base list stays
     // a prefix and the fallback insert can reuse the same values.
