@@ -48,6 +48,26 @@ country, region, city, postal, continent, timezone, lat/lon, colo, ISP
 and new-vs-returning (first-party `localStorage`). No IP is stored on the pageview
 row; IPs are only kept in a small owner-exclusion list.
 
+## Campaign tags
+
+Query strings are **not** logged — with exactly three exceptions, so a tagged link can be
+attributed even when the referrer is stripped (paid-ad redirects almost always strip it,
+which otherwise makes every ad click look "direct"). Tag a destination URL with standard
+UTM parameters:
+
+```
+https://bestsudoku.app/?utm_source=google&utm_medium=cpc&utm_campaign=spring_launch
+```
+
+`beacon.js` reads those three and forwards them to `/b` as `us` / `um` / `uc`, landing in
+the `source` / `medium` / `campaign` columns.
+
+Each tag is **allowlist-validated**: `[A-Za-z0-9_-]`, 40 characters max. A value that
+doesn't match is dropped **whole** (stored as `''`) rather than truncated or stripped — so
+free text appended to a `utm_` parameter can never smuggle content into the database. Use
+`r_sudoku`, not `r/sudoku`. No other query parameter is ever read, and the whole path is
+first-party — no third-party tracker, pixel, or SDK is involved anywhere in it.
+
 ## Owner opt-out
 
 Visiting **`/mute`** on a device drops a durable cookie *and* records that
