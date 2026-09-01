@@ -37,6 +37,27 @@ const tag = (v: string | null): string => {
   return s.length <= MAX_TAG && /^[A-Za-z0-9_-]*$/.test(s) ? s : ''
 }
 
+// Which FUNNEL a hit's campaign tags came from. A CLOSED vocabulary, not a charset — this
+// is our own marker, never a value a visitor supplies, so anything outside the list is a
+// bug or a probe and becomes ''.
+//   'web'     — utm_* read from a landing URL (a click that arrived at a page)
+//   'install' — Play install referrer, read once at first launch (a click that arrived at
+//               the Play listing, installed, and opened the app later — possibly days)
+const CHANNELS = ['web', 'install']
+const channel = (v: string | null): string => (CHANNELS.includes(String(v ?? '')) ? String(v) : '')
+
+// Click -> install latency, SECONDS. 0 means unknown, which is every non-install hit.
+// Must be ALL digits: parseInt alone would read "1;DROP" as 1, turning a malformed value
+// into a plausible one-second install — and this field's whole job is to separate a real
+// ad-driven install from a coincidental organic one, so a wrong number is worse than no
+// number. Over-large values are clamped to 90 days, comfortably past any real Play
+// referrer window.
+const MAX_CLICK_TO_INSTALL = 90 * 24 * 60 * 60
+const seconds = (v: string | null): number => {
+  const s = String(v ?? '')
+  return /^\d{1,10}$/.test(s) ? Math.min(MAX_CLICK_TO_INSTALL, parseInt(s, 10)) : 0
+}
+
 // External referrer host only — drop same-page/internal navigations. Accepts EITHER a
 // full URL (https://www.reddit.com/r/x) OR a bare hostname (reddit.com), so a sender
 // that passes only the hostname still gets attributed instead of silently dropped.
@@ -130,6 +151,21 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     const utmSource = tag(url.searchParams.get('us'))
     const utmMedium = tag(url.searchParams.get('um'))
     const utmCampaign = tag(url.searchParams.get('uc'))
+    // Attribution channel. An INSTALL-attributed hit and a WEB-LANDING-attributed hit are
+    // different funnels — "clicked an ad and landed on the site" vs "clicked an ad,
+    // installed from Play, opened the app days later" — so they must never merge into the
+    // same source/medium/campaign with nothing to tell them apart. Kept in its own column
+    // rather than as a reserved `medium` value, because medium carries real campaign data
+    // (cpc, organic) and overloading it would either destroy that data or leave the two
+    // funnels indistinguishable — the exact conflation this column exists to prevent.
+    //
+    // DERIVED when not declared, so nothing that already sends tags has to change: a sender
+    // that says nothing but carries tags is a web landing by definition, since the install
+    // path is the only one that ever declares itself. An 'install' hit stays 'install' even
+    // with no tags — an untagged first launch is still an install, just an organic one.
+    const declared = channel(url.searchParams.get('at'))
+    const attribution = declared || (utmSource || utmMedium || utmCampaign ? 'web' : '')
+    const clickToInstall = seconds(url.searchParams.get('cti'))
 
     // Base columns + values, in order. The utm columns are appended, so the base list stays
     // a prefix and the fallback insert can reuse the same values.
@@ -159,7 +195,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       refpath,
     ]
     // ip is the LAST bind — WHERE NOT EXISTS skips the row if this connection is muted.
-    const insert = (extraCols: string, extraVals: string[]) =>
+    const insert = (extraCols: string, extraVals: (string | number)[]) =>
       ctx.env.gss_geo
         .prepare(
           `INSERT INTO hits (${cols}${extraCols}) SELECT ${Array(vals.length + extraVals.length).fill('?').join(',')}
@@ -167,16 +203,25 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         )
         .bind(...vals, ...extraVals, ip)
         .run()
-    try {
-      // Preferred: also store the campaign tags. If the DB hasn't had the campaign columns
-      // added yet, fall back to the base insert so a pending migration never drops the hit
-      // (the fallback stops running once the columns exist).
-      await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
-    } catch {
+    // Richest column set first, degrading to base. Each tier exists ONLY so that a pending
+    // migration never drops a hit — once the columns exist the first tier always wins and
+    // the rest stop running. Order matters: newest columns are in the first tier alone, so
+    // a DB migrated for campaigns but not yet for attribution still records the campaign.
+    const attempts: [string, (string | number)[]][] = [
+      [
+        ', source, medium, campaign, attribution, click_to_install',
+        [utmSource, utmMedium, utmCampaign, attribution, clickToInstall],
+      ],
+      [', source, medium, campaign', [utmSource, utmMedium, utmCampaign]],
+      ['', []],
+    ]
+    for (const [extraCols, extraVals] of attempts) {
       try {
-        await insert('', [])
+        await insert(extraCols, extraVals)
+        break
       } catch {
-        // Never let a logging failure break the beacon.
+        // Fall through to a poorer column set. If even the base insert fails we simply lose
+        // the row — a logging failure must never break the beacon.
       }
     }
   }

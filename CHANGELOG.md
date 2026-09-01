@@ -7,6 +7,14 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Install attribution.** A Play Store install has no landing URL, so an ad click that ends
+  in an install was previously indistinguishable from organic traffic. `/b` now accepts an
+  attribution channel (`at=web|install`) and a click-to-install latency (`cti`, seconds),
+  stored in new `attribution` and `click_to_install` columns. Install-attributed and
+  web-landing-attributed hits are kept **apart** rather than merged into the same
+  source/medium/campaign — they are different funnels, and conflating them would corrupt
+  every campaign comparison. The channel is derived when not declared, so existing senders
+  need no change (see `migrate-install-attribution.sql`).
 - **Campaign tags (`utm_*`).** `beacon.js` now reads `utm_source` / `utm_medium` /
   `utm_campaign` from the landing URL and `/b` stores them (new `source` / `medium` /
   `campaign` columns), so links tagged per source — e.g. one `utm_campaign` per subreddit,

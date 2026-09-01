@@ -32,7 +32,22 @@ CREATE TABLE IF NOT EXISTS hits (
   -- the ONLY query values ever recorded.
   source    TEXT NOT NULL DEFAULT '',    -- utm_source   (e.g. "google", "reddit")
   medium    TEXT NOT NULL DEFAULT '',    -- utm_medium   (e.g. "cpc", "organic")
-  campaign  TEXT NOT NULL DEFAULT ''     -- utm_campaign (e.g. "beta_v2_tier1en", "r_sudoku")
+  campaign  TEXT NOT NULL DEFAULT '',    -- utm_campaign (e.g. "beta_v2_tier1en", "r_sudoku")
+  -- Which FUNNEL the tags above came from. Its own column rather than a reserved `medium`
+  -- value: medium carries real campaign data (cpc, organic), so overloading it would either
+  -- destroy that data or leave the two funnels indistinguishable.
+  --   ''        untagged hit
+  --   'web'     utm_* read from a landing URL — a click that arrived at a page
+  --   'install' Play install referrer, read once at first launch — a click that arrived at
+  --             the Play listing, installed, and opened the app later (possibly days)
+  -- Derived by /b when not declared, so senders that already post tags need no change.
+  attribution      TEXT NOT NULL DEFAULT '',
+  -- Seconds between the ad click and the install beginning (Play install referrer only);
+  -- 0 = unknown, which is every non-install hit. Deliberately a DURATION and not the two
+  -- absolute timestamps Play returns: the gap is the part that distinguishes an ad-driven
+  -- install from an organic one that merely coincided, while two second-resolution moments
+  -- alongside city + ISP would narrow the anonymity set far more than a campaign label does.
+  click_to_install INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits (ts);
 CREATE INDEX IF NOT EXISTS idx_hits_site_ts ON hits (site, ts);

@@ -68,6 +68,28 @@ free text appended to a `utm_` parameter can never smuggle content into the data
 `r_sudoku`, not `r/sudoku`. No other query parameter is ever read, and the whole path is
 first-party — no third-party tracker, pixel, or SDK is involved anywhere in it.
 
+### Web landings vs. installs
+
+A Play Store install has no landing URL — the user taps an ad, installs from the listing,
+and opens the app cold, so there is no query string to read. Those two funnels are recorded
+**separately**, never merged:
+
+| Param | Meaning |
+|---|---|
+| `at` | Attribution channel — exactly `web` or `install`, anything else stored as `''` |
+| `cti` | Click→install latency in seconds; all-digits only, clamped to 90 days, else `0` |
+
+`at` lands in the `attribution` column and `cti` in `click_to_install`. A sender that omits
+`at` but carries tags is recorded as `web`, so nothing that already posts tags needs to
+change. An `install` hit stays `install` even untagged — that is an organic install.
+
+The channel is its own column rather than a reserved `medium` value: `medium` carries real
+campaign data (`cpc`, `organic`), so overloading it would either destroy that data or leave
+the two funnels indistinguishable. Only the *duration* between click and install is stored,
+never the two absolute timestamps Play returns — the gap is what separates an ad-driven
+install from a coincidental organic one, while two second-resolution moments alongside city
+and ISP would narrow the anonymity set far more than a campaign label does.
+
 ## Owner opt-out
 
 Visiting **`/mute`** on a device drops a durable cookie *and* records that
