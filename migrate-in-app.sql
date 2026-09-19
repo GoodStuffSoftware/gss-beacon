@@ -1,0 +1,13 @@
+-- One-time migration: add the in-app-browser column to an existing `hits` table.
+-- (schema.sql already includes this for fresh databases; SQLite has no
+-- "ADD COLUMN IF NOT EXISTS", so run this ONCE against a pre-existing DB.)
+--
+--   Local:      npx wrangler d1 execute gss-geo --local  --file=./migrate-in-app.sql
+--   Production: npx wrangler d1 execute gss-geo --remote --file=./migrate-in-app.sql
+--
+-- Safe + additive: existing rows get '' (unknown — could be a normal browser or an
+-- indistinguishable Custom Tab) for this column; the beacon logs hits without it until
+-- this runs (its insert falls back to the campaign-only tier), then starts recording it.
+-- The `browser` column is untouched, so every existing query/dashboard built on it keeps
+-- working unchanged — this is purely additive, never a rewrite of history.
+ALTER TABLE hits ADD COLUMN in_app TEXT NOT NULL DEFAULT '';

@@ -88,6 +88,42 @@ function osOf(ua: string): string {
   return 'Other'
 }
 
+// In-app browser detection. This is WHY the OAuth sign-up funnel can go to zero on paid
+// Android traffic: Google refuses to run its sign-in flow inside a WebView, and an ad
+// network's "open in app" click frequently opens the landing page in exactly that. `browser`
+// above stays 'Chrome' either way (still correct — it's still Chrome's engine); this is a
+// separate signal for "was it embedded", read alongside `browser` rather than replacing it.
+//
+// NOT reliably detectable by user agent: Chrome Custom Tabs. A Custom Tab is a real Chrome
+// process the host app hands the URL to, and it deliberately sends the SAME UA as standalone
+// Chrome — that's the whole point of Custom Tabs (no site breakage). So a Custom Tab visit
+// looks identical to plain Chrome here and gets '' below. Don't add a heuristic for it; there
+// isn't a UA-visible one, and a false signal would be worse than an honest blank.
+export function inAppOf(ua: string): string {
+  // Named apps first — a named in-app browser is more useful than a generic bucket, and
+  // some (e.g. Facebook's Android in-app browser) ALSO carry the generic WebView marker
+  // below, so the specific match has to be checked before the generic one.
+  if (/FBAN\/|FBAV\//.test(ua)) return 'facebook'
+  if (/Instagram/.test(ua)) return 'instagram'
+  if (/TikTok|BytedanceWebview/.test(ua)) return 'tiktok'
+  if (/\bLine\//.test(ua)) return 'line'
+  if (/Snapchat/.test(ua)) return 'snapchat'
+  if (/Pinterest/.test(ua)) return 'pinterest'
+  if (/Twitter/.test(ua)) return 'twitter'
+  if (/\bGSA\//.test(ua)) return 'google_app' // the Google app's own in-app browser
+  // Android WebView: Chrome stamps "; wv)" into the platform block whenever a page is
+  // hosted inside android.webkit.WebView (any app embedding one), which a Custom Tab never
+  // does since it launches actual Chrome rather than an in-process WebView.
+  if (/;\s*wv\)/.test(ua)) return 'webview'
+  // iOS WKWebView: every real browser on iOS — Mobile Safari, and Chrome/Firefox/Edge-for-iOS,
+  // which are themselves required to run on WKWebView — appends "Safari/<version>" to its UA.
+  // An iOS UA with AppleWebKit but no Safari/ token is an app that embedded WKWebView without
+  // also copying that token, which is what an unbranded in-app browser looks like. Only
+  // reached here for an iOS UA that didn't already match a named app above.
+  if (/iPhone|iPad|iPod/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)) return 'wkwebview'
+  return ''
+}
+
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const url = new URL(ctx.request.url)
   const cf = ((ctx.request as any).cf ?? {}) as Record<string, unknown>
@@ -130,6 +166,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     const utmSource = tag(url.searchParams.get('us'))
     const utmMedium = tag(url.searchParams.get('um'))
     const utmCampaign = tag(url.searchParams.get('uc'))
+    // In-app-browser signal (see inAppOf above) — '' for a normal browser or an
+    // indistinguishable Custom Tab, else 'webview' / 'wkwebview' / a named app.
+    const inApp = inAppOf(ua)
 
     // Base columns + values, in order. The utm columns are appended, so the base list stays
     // a prefix and the fallback insert can reuse the same values.
@@ -167,16 +206,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         )
         .bind(...vals, ...extraVals, ip)
         .run()
-    try {
-      // Preferred: also store the campaign tags. If the DB hasn't had the campaign columns
-      // added yet, fall back to the base insert so a pending migration never drops the hit
-      // (the fallback stops running once the columns exist).
-      await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
-    } catch {
+    // Richest column set first, degrading to base. Each tier exists ONLY so a pending
+    // migration never drops a hit — once a tier's columns exist it always wins and the
+    // poorer tiers below it stop running. Order matters: in_app is newer than the campaign
+    // columns, so a DB migrated for campaigns but not yet for in_app still records those.
+    const attempts: [string, string[]][] = [
+      [', source, medium, campaign, in_app', [utmSource, utmMedium, utmCampaign, inApp]],
+      [', source, medium, campaign', [utmSource, utmMedium, utmCampaign]],
+      ['', []],
+    ]
+    for (const [extraCols, extraVals] of attempts) {
       try {
-        await insert('', [])
+        await insert(extraCols, extraVals)
+        break
       } catch {
-        // Never let a logging failure break the beacon.
+        // Fall through to a poorer column set. If even the base insert fails, the row is
+        // simply lost — a logging failure must never break the beacon.
       }
     }
   }

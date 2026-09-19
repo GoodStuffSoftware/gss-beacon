@@ -48,6 +48,14 @@ country, region, city, postal, continent, timezone, lat/lon, colo, ISP
 and new-vs-returning (first-party `localStorage`). No IP is stored on the pageview
 row; IPs are only kept in a small owner-exclusion list.
 
+Also `in_app`: whether the hit came from an in-app browser rather than a standalone one —
+Android WebView, an unbranded iOS WKWebView, or a named app (Facebook, Instagram, TikTok,
+Line, Snapchat, Pinterest, Twitter/X, the Google app). `''` means either a real browser or
+a Chrome Custom Tab, which sends the exact same user agent as standalone Chrome and so
+cannot be told apart from it. This matters for ad attribution: Google refuses OAuth
+sign-in inside an in-app browser, so a click that lands there can never become a sign-up
+no matter how good the traffic is.
+
 ## Campaign tags
 
 Query strings are **not** logged — with exactly three exceptions, so a tagged link can be

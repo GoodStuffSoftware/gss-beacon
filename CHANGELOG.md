@@ -7,6 +7,15 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **In-app-browser detection.** `/b` now records whether a hit came from an embedded
+  in-app browser (Android WebView, an unbranded iOS WKWebView, or a named app like
+  Facebook, Instagram, TikTok, Line, Snapchat, Pinterest, Twitter/X, or the Google app) in
+  a new `in_app` column, without touching the existing `browser` values — every existing
+  query/dashboard keeps working unchanged. Chrome Custom Tabs cannot be told apart from
+  plain Chrome by user agent and are deliberately left unflagged (`''`), same as a real
+  browser. This is why paid Android ad traffic can produce zero sign-ups: Google refuses
+  OAuth sign-in inside an in-app browser, and this column finally makes that visible in
+  the data instead of hiding inside an undifferentiated "Chrome" count.
 - **Campaign tags (`utm_*`).** `beacon.js` now reads `utm_source` / `utm_medium` /
   `utm_campaign` from the landing URL and `/b` stores them (new `source` / `medium` /
   `campaign` columns), so links tagged per source — e.g. one `utm_campaign` per subreddit,

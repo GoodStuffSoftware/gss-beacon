@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS hits (
   lang      TEXT NOT NULL DEFAULT '',    -- navigator.language (e.g. "en-US")
   screenw   INTEGER NOT NULL DEFAULT 0,  -- viewport width (responsive insight)
   visitor   TEXT NOT NULL DEFAULT 'new', -- 'new' | 'returning' (first-party localStorage; 'returning' is a reserved word)
+  -- In-app-browser signal, separate from `browser` above (which stays e.g. 'Chrome' either
+  -- way — it's still Chrome's engine). '' = normal browser, OR a Chrome Custom Tab, which is
+  -- NOT distinguishable from plain Chrome by user agent (see inAppOf() in functions/b.ts) —
+  -- so '' does not mean "definitely not in-app". Otherwise: 'webview' (Android WebView),
+  -- 'wkwebview' (an unbranded iOS WKWebView), or a named app ('facebook', 'instagram',
+  -- 'tiktok', 'line', 'snapchat', 'pinterest', 'twitter', 'google_app'). Matters because
+  -- Google refuses OAuth sign-in inside these, so this explains an otherwise-invisible
+  -- sign-up drop-off on paid Android traffic.
+  in_app    TEXT NOT NULL DEFAULT '',
   -- campaign tags — utm_* from the landing URL query, so tagged links (a subreddit post,
   -- a paid ad) are attributed even when the referrer is stripped. /b allowlist-validates
   -- each one to [A-Za-z0-9_-] and <=40 chars, else stores ''; these three named params are
