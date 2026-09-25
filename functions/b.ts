@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 //
-// Geo beacon endpoint. A page's JS pings GET /b?site=…&path=…&ref=…&l=…&sw=…&nv=… ;
+// Geo beacon endpoint. A page's JS pings GET /b?site=…&path=…&ref=…&l=…&sw=…&nv=…[&vid=…] ;
 // we read the visitor's geo/network from request.cf (free on all plans) plus a few
 // client signals, and log one row to D1. Bot-free by construction (only real
 // browsers that execute the page script hit this). Returns a 1×1 gif.
@@ -35,6 +35,20 @@ const MAX_TAG = 40
 const tag = (v: string | null): string => {
   const s = String(v ?? '')
   return s.length <= MAX_TAG && /^[A-Za-z0-9_-]*$/.test(s) ? s : ''
+}
+
+// Per-install visitor id (`vid`), sent by the Best Sudoku app so an impression and its
+// outcome (a sign-in, an install, a return visit) join per DEVICE. It is that app's own
+// random install UUID, never an account id. Stored ONLY when it is exactly a lowercase RFC
+// 4122 v4 UUID (after lowercasing, so one device can't split into two keys), else NULL:
+// an allowlist of one shape, like tag() above, so nothing but an opaque random id can ever
+// ride this column. Absent or invalid never rejects the hit; it just stores NULL. Other
+// sites don't send it and are unaffected.
+const VID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+export const visitorId = (v: string | null): string | null => {
+  if (v === null || v.length !== 36) return null
+  const s = v.toLowerCase()
+  return VID_SHAPE.test(s) ? s : null
 }
 
 // External referrer host only — drop same-page/internal navigations. Accepts EITHER a
@@ -130,6 +144,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     const utmSource = tag(url.searchParams.get('us'))
     const utmMedium = tag(url.searchParams.get('um'))
     const utmCampaign = tag(url.searchParams.get('uc'))
+    // Per-install visitor id (see visitorId above): a v4 UUID or NULL, never a rejection.
+    const vid = visitorId(url.searchParams.get('vid'))
 
     // Base columns + values, in order. The utm columns are appended, so the base list stays
     // a prefix and the fallback insert can reuse the same values.
@@ -159,7 +175,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       refpath,
     ]
     // ip is the LAST bind — WHERE NOT EXISTS skips the row if this connection is muted.
-    const insert = (extraCols: string, extraVals: string[]) =>
+    const insert = (extraCols: string, extraVals: (string | null)[]) =>
       ctx.env.gss_geo
         .prepare(
           `INSERT INTO hits (${cols}${extraCols}) SELECT ${Array(vals.length + extraVals.length).fill('?').join(',')}
@@ -167,16 +183,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         )
         .bind(...vals, ...extraVals, ip)
         .run()
-    try {
-      // Preferred: also store the campaign tags. If the DB hasn't had the campaign columns
-      // added yet, fall back to the base insert so a pending migration never drops the hit
-      // (the fallback stops running once the columns exist).
-      await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
-    } catch {
+    // Richest column set first, degrading to base. Each poorer tier exists ONLY so a pending
+    // migration never drops a hit: before migrate-vid.sql the vid tier fails and the campaign
+    // tier records the hit exactly as before; once a tier's columns exist it always wins and
+    // the tiers below it stop running.
+    const attempts: [string, (string | null)[]][] = [
+      [', source, medium, campaign, vid', [utmSource, utmMedium, utmCampaign, vid]],
+      [', source, medium, campaign', [utmSource, utmMedium, utmCampaign]],
+      ['', []],
+    ]
+    for (const [extraCols, extraVals] of attempts) {
       try {
-        await insert('', [])
+        await insert(extraCols, extraVals)
+        break
       } catch {
-        // Never let a logging failure break the beacon.
+        // Fall through to a poorer column set. If even the base insert fails, the row is
+        // simply lost; a logging failure must never break the beacon.
       }
     }
   }

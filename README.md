@@ -48,6 +48,13 @@ country, region, city, postal, continent, timezone, lat/lon, colo, ISP
 and new-vs-returning (first-party `localStorage`). No IP is stored on the pageview
 row; IPs are only kept in a small owner-exclusion list.
 
+Also `vid`, **only when a caller sends one**: an app's own random per-install UUID, so an
+impression and what followed it (a sign-in, an install, a return visit) can be joined per
+device. It is stored only if it is exactly a lowercase v4 UUID, else `NULL`, and a missing
+or malformed value never rejects the hit. `beacon.js` never sends it, so every site on the
+loader stores `NULL`; today only the Best Sudoku app sends it. It is never an account id,
+an ad id or a hardware id. Indexed by `(site, vid, ts)` for rows that have one.
+
 ## Campaign tags
 
 Query strings are **not** logged — with exactly three exceptions, so a tagged link can be

@@ -32,10 +32,19 @@ CREATE TABLE IF NOT EXISTS hits (
   -- the ONLY query values ever recorded.
   source    TEXT NOT NULL DEFAULT '',    -- utm_source   (e.g. "google", "reddit")
   medium    TEXT NOT NULL DEFAULT '',    -- utm_medium   (e.g. "cpc", "organic")
-  campaign  TEXT NOT NULL DEFAULT ''     -- utm_campaign (e.g. "beta_v2_tier1en", "r_sudoku")
+  campaign  TEXT NOT NULL DEFAULT '',    -- utm_campaign (e.g. "beta_v2_tier1en", "r_sudoku")
+  -- Per-install visitor id: the app's own RANDOM install UUID (never an account id, ad id
+  -- or device hardware id), sent as `vid` so an impression and its outcome join per device.
+  -- /b stores it only when it is exactly a lowercase v4 UUID, else NULL; NULL is also every
+  -- site that doesn't send one. NULLABLE on purpose (unlike the '' columns above): "no id"
+  -- must never collide into one giant '' device in a join. Added by migrate-vid.sql.
+  vid       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_hits_ts ON hits (ts);
 CREATE INDEX IF NOT EXISTS idx_hits_site_ts ON hits (site, ts);
+-- Per-device funnel joins (same site + vid, within a ts window). Partial, so rows without a
+-- vid (every other site, all history before it existed) cost nothing.
+CREATE INDEX IF NOT EXISTS idx_hits_site_vid_ts ON hits (site, vid, ts) WHERE vid IS NOT NULL;
 
 -- Owner opt-out by connection. /mute inserts the caller's IP; /b skips any hit
 -- from a listed IP (covers every site, incl. other domains the cookie can't reach).

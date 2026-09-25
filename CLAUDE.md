@@ -40,6 +40,11 @@ DB (`npm run schema`) as part of the same change — a deploy without the migrat
 will break inserts. The `excluded_ips` table (owner opt-out) must exist before the
 beacon references it.
 
+A new column on the EXISTING `hits` table ships as a one-time `migrate-<name>.sql`
+(`ALTER TABLE ... ADD COLUMN`), applied before the function deploy; `schema.sql` is
+updated to match, but only builds a fresh database (`CREATE TABLE IF NOT EXISTS` never
+adds a column, and an index on the new column fails until the ALTER has run).
+
 ## Destructive git safety
 
 Before any `push --force`, `reset --hard`, or deleting an origin-tracked branch:

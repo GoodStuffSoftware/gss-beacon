@@ -7,6 +7,11 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Per-install visitor id (`vid`).** `/b` stores an app's own random install UUID when it
+  sends one, so a pop-up impression and its outcome can be joined per device. Only an exact
+  lowercase v4 UUID is kept; anything else, or nothing, stores `NULL` and never rejects the
+  hit. Other sites are unaffected. Needs `migrate-vid.sql` on an existing database (a
+  nullable column plus a partial index); until then `/b` records hits exactly as before.
 - **Campaign tags (`utm_*`).** `beacon.js` now reads `utm_source` / `utm_medium` /
   `utm_campaign` from the landing URL and `/b` stores them (new `source` / `medium` /
   `campaign` columns), so links tagged per source — e.g. one `utm_campaign` per subreddit,

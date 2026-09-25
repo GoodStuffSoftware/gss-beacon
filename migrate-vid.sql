@@ -1,0 +1,32 @@
+-- One-time migration: add the per-install visitor id column + its join index to an
+-- existing `hits` table. (schema.sql already includes both for fresh databases; SQLite has
+-- no "ADD COLUMN IF NOT EXISTS", so run the ALTER exactly ONCE against a pre-existing DB.)
+--
+-- ORDER: apply this BEFORE deploying the /b function that writes `vid`. The function
+-- falls back to its campaign-only insert if the column is missing, so the wrong order
+-- loses no hits, but it costs a failed statement per hit until this runs.
+-- `npm run schema` against a pre-migration DB fails at the vid index (nothing is written);
+-- run THIS file for an existing DB, schema.sql only for a fresh one.
+--
+--   Local:      npx wrangler d1 execute gss-geo --local  --file=./migrate-vid.sql
+--   Production: see the go-live runbook; the owner applies it, one statement at a time,
+--               with a Time Travel bookmark taken first.
+--
+-- Safe + additive:
+--  - `vid` is NULLABLE with no default, so SQLite only rewrites the table definition; no
+--    existing row is touched and every existing row reads NULL. Every other site that uses
+--    this beacon never sends `vid` and keeps writing NULL.
+--  - Every existing query/dashboard is unaffected: nothing selects a column by position,
+--    and the existing indexes are untouched.
+--  - The index is PARTIAL (`WHERE vid IS NOT NULL`): rows without a vid (other sites, and
+--    every row from before the app release that sends it) never enter it, so it costs
+--    nothing for sites that don't send one. SQLite uses a partial index for any query with an equality or
+--    range on `vid` (e.g. the per-device join `o.vid = s.vid`), which implies NOT NULL.
+--  - Column order (site, vid, ts) serves the per-device funnel joins: equality on site and
+--    vid, then a ts range ("the same device, within N days after it was shown").
+--
+-- Rollback (only if something is actually wrong; an unused NULL column is harmless):
+--   DROP INDEX IF EXISTS idx_hits_site_vid_ts;
+--   ALTER TABLE hits DROP COLUMN vid;   -- index must be dropped first
+ALTER TABLE hits ADD COLUMN vid TEXT;
+CREATE INDEX IF NOT EXISTS idx_hits_site_vid_ts ON hits (site, vid, ts) WHERE vid IS NOT NULL;
