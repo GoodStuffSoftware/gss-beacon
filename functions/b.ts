@@ -5,8 +5,13 @@
 // client signals, and log one row to D1. Bot-free by construction (only real
 // browsers that execute the page script hit this). Returns a 1×1 gif.
 
+import { isSplitRefusedPath } from './_lib/refused.ts'
+
 interface Env {
   gss_geo: D1Database
+  // Service binding to gss-live's `Notify` entrypoint (wrangler.toml). Optional on purpose: a
+  // missing binding must never affect the beacon.
+  LIVE?: { notify(): Promise<void> }
 }
 
 const GIF = Uint8Array.from(
@@ -23,6 +28,22 @@ function pixel(): Response {
   })
 }
 const clip = (v: unknown, n: number) => String(v ?? '').slice(0, n)
+
+// Live-update ping: tell gss-live that a new row was written, so open dashboards can refresh.
+// Fire-and-forget and fail-safe: called with ZERO arguments (the ping carries nothing about the
+// row), never awaited before the pixel is returned, and a missing binding, a throw or a rejection
+// is swallowed here so it can never change or delay the response.
+function notifyLive(ctx: { env: Env; waitUntil(p: Promise<unknown>): void }): void {
+  try {
+    ctx.waitUntil(
+      (async () => {
+        await ctx.env.LIVE?.notify()
+      })().catch(() => {}),
+    )
+  } catch {
+    /* never let a ping break the beacon */
+  }
+}
 
 // Campaign tag from OUR OWN tagged links: a short opaque label, nothing else. This is the
 // one place a query value is ever recorded, so it is an allowlist, not a sanitiser — a tag
@@ -135,10 +156,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     // a prefix and the fallback insert can reuse the same values.
     const cols =
       'ts, site, path, referrer, country, region, city, postal, continent, timezone, lat, lon, colo, org, device, browser, os, lang, screenw, visitor, refpath'
+    // The path exactly as stored (clipped), so the live-ping refusal check sees what the row holds.
+    const storedPath = clip(url.searchParams.get('path'), 200)
     const vals: (string | number)[] = [
       Date.now(),
       site,
-      clip(url.searchParams.get('path'), 200),
+      storedPath,
       referrerHost,
       clip(cf.country, 4),
       clip(cf.region, 60),
@@ -167,18 +190,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         )
         .bind(...vals, ...extraVals, ip)
         .run()
+    let res: D1Result | undefined
     try {
       // Preferred: also store the campaign tags. If the DB hasn't had the campaign columns
       // added yet, fall back to the base insert so a pending migration never drops the hit
       // (the fallback stops running once the columns exist).
-      await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
+      res = await insert(', source, medium, campaign', [utmSource, utmMedium, utmCampaign])
     } catch {
       try {
-        await insert('', [])
+        res = await insert('', [])
       } catch {
         // Never let a logging failure break the beacon.
       }
     }
+    // Ping only when a row was really written (an excluded IP writes none) and its path is not a
+    // counts-only path: refused rows never trigger or influence a ping.
+    if ((res?.meta?.changes ?? 0) > 0 && !isSplitRefusedPath(storedPath)) notifyLive(ctx)
   }
   return pixel()
 }

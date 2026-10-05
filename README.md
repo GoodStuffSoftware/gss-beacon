@@ -84,6 +84,12 @@ site page  ──<img>──►  beacon.goodstuff.software/b?site=…&path=…
 gss-stats /api/geo  ──reads the SAME D1 by binding──►  charts region/city/ISP/map
 ```
 
+- **Live-update ping.** After a row is really written, `/b` calls the `gss-live` Worker's
+  `Notify` entrypoint through the `LIVE` service binding (`wrangler.toml`), fire-and-forget
+  (`ctx.waitUntil`, no arguments, never awaited, errors swallowed), so open gss-stats dashboards
+  can refresh. Counts only: a row on a refused path (`functions/_lib/refused.ts`, a copy of
+  gss-stats' `SPLIT_REFUSED_PATH_PATTERNS`) never pings, and the ping carries nothing about any
+  row. With no binding the beacon behaves exactly as before.
 - **D1 `gss-geo`** is bound to *both* this project (write) and gss-stats (read) by
   database id — a runtime binding, no API token. (Cloudflare's Analytics Engine SQL
   API is gated on this plan; D1 sidesteps it.)
@@ -107,6 +113,18 @@ npm run deploy   # wrangler pages deploy → beacon.goodstuff.software
 ```
 
 `schema.sql` defines the D1 tables (`hits` + the `excluded_ips` opt-out list).
+
+**Deploy order for the `LIVE` service binding** (first deploy of live updates). The beacon must
+NOT be deployed before the `gss-live` Worker exists: Cloudflare requires the target of a service
+binding to be deployed first (a Worker deploy fails otherwise; see the
+[service bindings docs](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/#deployment),
+which do not spell out the Pages case, so treat it as failing too). In order:
+
+1. gss-stats live-push PR 1 is merged to `main`.
+2. Its `deploy-live` CI job is green, so `gss-live` exists (check it in the Workers list).
+3. Then deploy the beacon with the usual `npm run deploy` above.
+
+After that, a later redeploy needs no ordering. Run `npm test` before a deploy.
 
 ## Branch
 
