@@ -9,8 +9,9 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ### Added
 - **Live-update ping.** After `/b` writes a row it now tells the `gss-live` Worker (service
   binding `LIVE`), so open stats dashboards can refresh without a reload. Counts only: rows on
-  return, game-start, completion, tutorial-completion, tour-skip and tour-exit paths never ping,
-  and the ping carries no row data. It is fire-and-forget and never changes or delays the pixel;
+  return, game-start, completion, tutorial-completion, tour-skip and tour-exit paths never ping
+  (nor does any path containing a NUL byte, which the SQL guard also refuses), and the ping
+  carries no row data. It is fire-and-forget and never changes or delays the pixel;
   with no binding the beacon is unchanged. Deploy `gss-live` first (see README Deploy).
 - **Campaign tags (`utm_*`).** `beacon.js` now reads `utm_source` / `utm_medium` /
   `utm_campaign` from the landing URL and `/b` stores them (new `source` / `medium` /

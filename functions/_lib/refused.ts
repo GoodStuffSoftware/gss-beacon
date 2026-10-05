@@ -22,9 +22,15 @@ export const SPLIT_REFUSED_PATH_PATTERNS: readonly string[] = [
   '/tour/skip/%',
 ]
 
-/** The JS reading of SPLIT_REFUSED_PATH_PATTERNS, matching SQLite LIKE exactly (ASCII case
- * folded; a pattern ending in `%` is a prefix match, any other pattern is an exact match). */
+/** The JS reading of SPLIT_REFUSED_PATH_PATTERNS, matching SQLite LIKE (ASCII case folded; a
+ * pattern ending in `%` is a prefix match, any other pattern is an exact match).
+ *
+ * Fails closed on NUL: SQLite compares LIKE operands as NUL-terminated text, so a stored path such
+ * as `/tour/skip\u0000x` LIKE '/tour/skip' is true in gss-stats' SQL guard (refused) while a plain
+ * JS comparison says it is not. Any path containing NUL is therefore treated as refused here, so a
+ * row the SQL guard refuses can never trigger a ping. The pattern list above is unchanged. */
 export function isSplitRefusedPath(path: string): boolean {
+  if (path.includes('\u0000')) return true
   const p = path.replace(/[A-Z]/g, (c) => c.toLowerCase())
   return SPLIT_REFUSED_PATH_PATTERNS.some((pat) =>
     pat.endsWith('%') ? p.startsWith(pat.slice(0, -1)) : p === pat,

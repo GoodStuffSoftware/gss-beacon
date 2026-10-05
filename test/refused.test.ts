@@ -54,3 +54,18 @@ test('matcher: prefix patterns need the full segment, exact patterns match exact
     assert.equal(isSplitRefusedPath(p), false, p)
   }
 })
+
+test('matcher fails closed on NUL (SQLite LIKE truncates at NUL): any path containing one is refused', () => {
+  for (const p of [
+    '/tour/skip\u0000x',
+    '/tour/exit-at\u0000/1',
+    '/tour/skip\u0000',
+    '/return/\u0000x',
+    '/game/start/x\u0000',
+    '/play\u0000',
+    '\u0000/play',
+  ]) {
+    assert.equal(isSplitRefusedPath(p), true, JSON.stringify(p))
+  }
+  assert.equal(isSplitRefusedPath('/'), false)
+})

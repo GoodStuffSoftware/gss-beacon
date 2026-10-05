@@ -152,6 +152,22 @@ test('refusal is judged on the stored 200-char clip', async () => {
   }
 })
 
+test('no notify when the stored path contains NUL (SQLite LIKE truncates at NUL), still writes the row', async () => {
+  const exact = SPLIT_REFUSED_PATH_PATTERNS.filter((p) => !p.endsWith('%'))
+  const prefix = SPLIT_REFUSED_PATH_PATTERNS.filter((p) => p.endsWith('%')).map((p) => p.slice(0, -1) + 'x')
+  const paths = [
+    ...exact.flatMap((p) => [p + '\u0000x', p + '\u0000/1', p + '\u0000']), // NUL after each exact pattern
+    ...prefix.map((p) => p + '\u0000/d0'), // NUL after a prefix pattern
+    '/play\u0000', '/play\u0000x', '/a\u0000/return/b', // NUL in an ordinary path
+  ]
+  for (const path of paths) {
+    const { h, calls } = await withSpy({ path })
+    assert.equal(h.inserts, 1, JSON.stringify(path)) // the row is still written ...
+    assert.equal(calls.length, 0, JSON.stringify(path)) // ... but it never pings
+    await assertPixel(h.res)
+  }
+})
+
 test('no notify for muted, internal, datacenter or non-browser requests (no insert at all)', async () => {
   const cases: Opts[] = [
     { headers: { cookie: 'a=b; gssb_mute=1' } },
