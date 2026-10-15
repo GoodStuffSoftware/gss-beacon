@@ -8,7 +8,7 @@
 // functions/b.ts checks the stored path against this list before it calls the LIVE binding.
 
 /** SQL LIKE patterns for the rows the rule protects (return-curve beacons, game completions,
- * counted game starts, tour skips and exits, tutorial completions). A pattern ending in `%` is a
+ * counted game starts, tour skips and exits, tutorial completions, coach-strip dismiss, close and shown rows). A pattern ending in `%` is a
  * prefix match; any other pattern matches that exact path. */
 export const SPLIT_REFUSED_PATH_PATTERNS: readonly string[] = [
   '/return/%',
@@ -20,6 +20,9 @@ export const SPLIT_REFUSED_PATH_PATTERNS: readonly string[] = [
   '/tour/exit-at',
   '/tour/skip',
   '/tour/skip/%',
+  '/coach/dismissed/%',
+  '/coach/closed-at/%',
+  '/coach/shown/%',
 ]
 
 /** The JS reading of SPLIT_REFUSED_PATH_PATTERNS, matching SQLite LIKE (ASCII case folded; a
