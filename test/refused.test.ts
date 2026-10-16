@@ -18,6 +18,7 @@ const GSS_STATS_LIST = [
   '/coach/dismissed/%',
   '/coach/closed-at/%',
   '/coach/shown/%',
+  '/ab/ask-order/%',
 ]
 
 test('refused pattern list equals the gss-stats list (parity)', () => {
@@ -40,6 +41,9 @@ test('matcher: prefix patterns need the full segment, exact patterns match exact
     '/coach/dismissed/x',
     '/Coach/Closed-At/2',
     '/coach/shown/x',
+    '/ab/ask-order/signin-first/assigned',
+    '/ab/ask-order/install-first/shown/install',
+    '/AB/Ask-Order/x',
   ]) {
     assert.equal(isSplitRefusedPath(p), true, p)
   }
@@ -51,6 +55,9 @@ test('matcher: prefix patterns need the full segment, exact patterns match exact
     '/tour/complete',
     '/coach/tour-opened',
     '/coach/shown',
+    '/ab/ask-order',
+    '/ab/ask-orders/x',
+    '/ab',
     '/tour/skipped',
     '/tour/exit-atx',
     '/returns',

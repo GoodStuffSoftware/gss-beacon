@@ -9,7 +9,7 @@ All notable changes to **gss-beacon** are documented here. The format follows
 ### Added
 - **Live-update ping.** After `/b` writes a row it now tells the `gss-live` Worker (service
   binding `LIVE`), so open stats dashboards can refresh without a reload. Counts only: rows on
-  return, game-start, completion, tutorial-completion, tour-skip, tour-exit and coach-strip shown, dismiss and close paths never ping
+  return, game-start, completion, tutorial-completion, tour-skip, tour-exit, coach-strip shown, dismiss and close, and ask-order A/B (`/ab/ask-order/…`) paths never ping
   (nor does any path containing a NUL byte, which the SQL guard also refuses), and the ping
   carries no row data. It is fire-and-forget and never changes or delays the pixel;
   with no binding the beacon is unchanged. Deploy `gss-live` first (see README Deploy).
