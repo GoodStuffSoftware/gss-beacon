@@ -7,3 +7,11 @@ pages_build_output_dir = "public"
 binding = "gss_geo"
 database_name = "gss-geo"
 database_id = "fa0b2929-0086-479e-ae10-50509c34ebf8"
+
+# Live-update ping: the gss-live Worker's `Notify` entrypoint (RPC only). The Worker must exist
+# BEFORE this project is deployed — see README "Deploy". Optional at runtime: with no binding the
+# beacon behaves exactly as before.
+[[services]]
+binding = "LIVE"
+service = "gss-live"
+entrypoint = "Notify"
