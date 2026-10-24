@@ -136,10 +136,18 @@ test('no notify on any refused pattern, with case variants', async () => {
 test('refusal is judged on the stored 200-char clip', async () => {
   for (const pat of SPLIT_REFUSED_PATH_PATTERNS) {
     // a refused path far longer than 200 chars is clipped, and the clip is still refused
-    const long = sample(pat) + '/' + 'a'.repeat(400)
+    // (an exact pattern with no `/%` sibling, like /game/first-finish, has no longer refused form: use it as is)
+    const hasLongForm = pat.endsWith('%') || SPLIT_REFUSED_PATH_PATTERNS.includes(pat + '/%')
+    const long = hasLongForm ? sample(pat) + '/' + 'a'.repeat(400) : sample(pat)
     const { h, calls } = await withSpy({ path: long })
     assert.equal(String(h.boundPaths[0]).length <= 200, true)
     assert.equal(calls.length, 0, pat)
+  }
+  // an exact pattern with a long tail is a different path, so it notifies
+  {
+    const { h, calls } = await withSpy({ path: '/game/first-finish' + 'x'.repeat(300) })
+    assert.equal(h.inserts, 1)
+    assert.equal(calls.length, 1)
   }
   // a refused-looking tail BEYOND the clip is not part of the stored path: it notifies
   const beyond = '/x'.padEnd(200, 'x') + '/return/a'
