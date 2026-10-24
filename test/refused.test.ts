@@ -21,6 +21,9 @@ const GSS_STATS_LIST = [
   '/ab/ask-order/%',
   '/funnel/%',
   '/game/first-finish',
+  '/signin-prompt/first-finish',
+  '/signin-eligible/earned/first-finish',
+  '/popup-outcome/signin-prompt/first-finish/%',
 ]
 
 test('refused pattern list equals the gss-stats list (parity)', () => {
@@ -52,6 +55,12 @@ test('matcher: prefix patterns need the full segment, exact patterns match exact
     '/FUNNEL/Purchase/Web',
     '/game/first-finish',
     '/Game/First-Finish',
+    '/signin-prompt/first-finish',
+    '/signin-eligible/earned/first-finish',
+    '/popup-outcome/signin-prompt/first-finish/accepted',
+    '/Popup-Outcome/Signin-Prompt/First-Finish/Accepted',
+    '/SIGNIN-PROMPT/FIRST-FINISH',
+    '/Signin-Eligible/Earned/First-Finish',
   ]) {
     assert.equal(isSplitRefusedPath(p), true, p)
   }
@@ -62,6 +71,14 @@ test('matcher: prefix patterns need the full segment, exact patterns match exact
     '/game/first-finishx',
     '/game/first-finish/extra',
     '/game/first-finish/',
+    '/signin-prompt/first-finishx',
+    '/signin-prompt/first-finish/extra',
+    '/signin-prompt',
+    '/signin-prompt/placement',
+    '/signin-eligible/earned/first-finishx',
+    '/signin-eligible/earned/first-finish/extra',
+    '/popup-outcome/signin-prompt/placement/accepted',
+    '/popup-outcome/signin-prompt/first-finish',
     '/tour/start',
     '/tour/complete',
     '/coach/tour-opened',

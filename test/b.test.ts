@@ -144,10 +144,10 @@ test('refusal is judged on the stored 200-char clip', async () => {
     assert.equal(calls.length, 0, pat)
   }
   // an exact pattern with a long tail is a different path, so it notifies
-  {
-    const { h, calls } = await withSpy({ path: '/game/first-finish' + 'x'.repeat(300) })
-    assert.equal(h.inserts, 1)
-    assert.equal(calls.length, 1)
+  for (const exact of SPLIT_REFUSED_PATH_PATTERNS.filter((x) => !x.endsWith('%') && !SPLIT_REFUSED_PATH_PATTERNS.includes(x + '/%'))) {
+    const { h, calls } = await withSpy({ path: exact + 'x'.repeat(300) })
+    assert.equal(h.inserts, 1, exact)
+    assert.equal(calls.length, 1, exact)
   }
   // a refused-looking tail BEYOND the clip is not part of the stored path: it notifies
   const beyond = '/x'.padEnd(200, 'x') + '/return/a'

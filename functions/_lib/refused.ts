@@ -8,7 +8,7 @@
 // functions/b.ts checks the stored path against this list before it calls the LIVE binding.
 
 /** SQL LIKE patterns for the rows the rule protects (return-curve beacons, game completions,
- * counted game starts, tour skips and exits, tutorial completions, coach-strip dismiss, close and shown, ask-order A/B, paid-funnel and first-finish rows). A pattern ending in `%` is a
+ * counted game starts, tour skips and exits, tutorial completions, coach-strip dismiss, close and shown, ask-order A/B, paid-funnel, first-finish and first-finish sign-in ask rows). A pattern ending in `%` is a
  * prefix match; any other pattern matches that exact path. */
 export const SPLIT_REFUSED_PATH_PATTERNS: readonly string[] = [
   '/return/%',
@@ -29,6 +29,10 @@ export const SPLIT_REFUSED_PATH_PATTERNS: readonly string[] = [
   '/funnel/%',
   // Once-per-device first finish (gss-stats 0.58.0): an EXACT match, no trailing %.
   '/game/first-finish',
+  // First-finish sign-in ask rows (gss-stats): the two exact paths have no `/%` sibling; the outcome row is a prefix.
+  '/signin-prompt/first-finish',
+  '/signin-eligible/earned/first-finish',
+  '/popup-outcome/signin-prompt/first-finish/%',
 ]
 
 /** The JS reading of SPLIT_REFUSED_PATH_PATTERNS, matching SQLite LIKE (ASCII case folded; a
