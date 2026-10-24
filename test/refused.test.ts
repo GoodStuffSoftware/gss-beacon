@@ -1,0 +1,117 @@
+// Parity: the refused-path list and matcher must equal the gss-stats ones (src/lib/splitGuard.ts
+// SPLIT_REFUSED_PATH_PATTERNS / isSplitRefusedPath). gss-stats pins the SAME literal in
+// src/lib/splitGuard.beaconParity.test.ts. Change the list in both repos, or a test fails.
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { SPLIT_REFUSED_PATH_PATTERNS, isSplitRefusedPath } from '../functions/_lib/refused.ts'
+
+const GSS_STATS_LIST = [
+  '/return/%',
+  '/game/complete/%',
+  '/game/complete-deferred/%',
+  '/game/tutorial-complete/%',
+  '/game/start/%',
+  '/tour/exit-at/%',
+  '/tour/exit-at',
+  '/tour/skip',
+  '/tour/skip/%',
+  '/coach/dismissed/%',
+  '/coach/closed-at/%',
+  '/coach/shown/%',
+  '/ab/ask-order/%',
+  '/funnel/%',
+  '/game/first-finish',
+  '/signin-prompt/first-finish',
+  '/signin-eligible/earned/first-finish',
+  '/popup-outcome/signin-prompt/first-finish/%',
+]
+
+test('refused pattern list equals the gss-stats list (parity)', () => {
+  assert.deepEqual([...SPLIT_REFUSED_PATH_PATTERNS], GSS_STATS_LIST)
+})
+
+test('matcher: prefix patterns need the full segment, exact patterns match exactly, ASCII case-folded', () => {
+  for (const p of [
+    '/return/x/d0',
+    '/RETURN/x',
+    '/Game/Complete/1',
+    '/game/complete-deferred/a',
+    '/game/tutorial-complete/first-run',
+    '/game/start/x',
+    '/tour/exit-at',
+    '/Tour/Exit-At/3',
+    '/tour/skip',
+    '/TOUR/SKIP',
+    '/tour/skip/x',
+    '/coach/dismissed/x',
+    '/Coach/Closed-At/2',
+    '/coach/shown/x',
+    '/ab/ask-order/signin-first/assigned',
+    '/ab/ask-order/install-first/shown/install',
+    '/AB/Ask-Order/x',
+    '/funnel/trial-start',
+    '/funnel/checkout-start/web',
+    '/funnel/purchase/play',
+    '/FUNNEL/Purchase/Web',
+    '/game/first-finish',
+    '/Game/First-Finish',
+    '/signin-prompt/first-finish',
+    '/signin-eligible/earned/first-finish',
+    '/popup-outcome/signin-prompt/first-finish/accepted',
+    '/Popup-Outcome/Signin-Prompt/First-Finish/Accepted',
+    '/SIGNIN-PROMPT/FIRST-FINISH',
+    '/Signin-Eligible/Earned/First-Finish',
+  ]) {
+    assert.equal(isSplitRefusedPath(p), true, p)
+  }
+  for (const p of [
+    '/',
+    '/game',
+    '/game/first-move',
+    '/game/first-finishx',
+    '/game/first-finish/extra',
+    '/game/first-finish/',
+    '/signin-prompt/first-finishx',
+    '/signin-prompt/first-finish/extra',
+    '/signin-prompt',
+    '/signin-prompt/placement',
+    '/signin-eligible/earned/first-finishx',
+    '/signin-eligible/earned/first-finish/extra',
+    '/popup-outcome/signin-prompt/placement/accepted',
+    '/popup-outcome/signin-prompt/first-finish',
+    '/tour/start',
+    '/tour/complete',
+    '/coach/tour-opened',
+    '/coach/shown',
+    '/ab/ask-order',
+    '/ab/ask-orders/x',
+    '/funnel',
+    '/funnels/x',
+    '/funnel-test',
+    '/ab',
+    '/tour/skipped',
+    '/tour/exit-atx',
+    '/returns',
+    '/return',
+    '/game/completed',
+    '/x/return/y',
+    '',
+  ]) {
+    assert.equal(isSplitRefusedPath(p), false, p)
+  }
+})
+
+test('matcher fails closed on NUL (SQLite LIKE truncates at NUL): any path containing one is refused', () => {
+  for (const p of [
+    '/tour/skip\u0000x',
+    '/tour/exit-at\u0000/1',
+    '/tour/skip\u0000',
+    '/return/\u0000x',
+    '/game/start/x\u0000',
+    '/play\u0000',
+    '\u0000/play',
+  ]) {
+    assert.equal(isSplitRefusedPath(p), true, JSON.stringify(p))
+  }
+  assert.equal(isSplitRefusedPath('/'), false)
+})
